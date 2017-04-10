@@ -17,6 +17,7 @@
 
 ISR(SPI_STC_vect);
 
+template <IOpin &SS,IOpin &MISO = AVR::SPI::MISO, IOpin &MOSI, IOpin &SCLK>
 class MLX90363 {
  friend void SPI_STC_vect();
  static inline void isr();
@@ -78,10 +79,10 @@ class MLX90363 {
  /**
   * The slave select line
   */
- static constexpr IOpin &SS = Board::MagSel;
- static constexpr IOpin &MISO = Board::SPI::MISO;
- static constexpr IOpin &MOSI = Board::SPI::MOSI;
- static constexpr IOpin &SCLK = Board::SPI::SCLK;
+// static constexpr IOpin &SS = Board::MagSel;
+// static constexpr IOpin &MISO = Board::SPI::MISO;
+// static constexpr IOpin &MOSI = Board::SPI::MOSI;
+// static constexpr IOpin &SCLK = Board::SPI::SCLK;
  
  /**
   * OpCodes from the MLX90363 datasheet.
@@ -221,4 +222,3 @@ public:
 };
 
 #endif	/* MLX90363_H */
-
