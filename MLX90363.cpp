@@ -5,40 +5,34 @@
  * Created on December 10, 2014, 4:11 PM
  */
 
-#include <avr/pgmspace.h>
-
 #include "MLX90363.h"
-#include "Board.h"
 
-#include <AVR++/SPI.h>
-#include "Clock.h"
+#include <SPI.h>
 
-::Clock::MicroTime MLX90363::dataReadyTime(0);
+static unsigned char lastReceived;
 
-static inline void sendSPI(u1 const b) {
- *AVR::SPI::DR = b;
+static inline void sendSPI(unsigned char const b) {
+ lastReceived = SPI.transfer(b);
 }
 
-static inline u1 receiveSPI() {
- return *AVR::SPI::DR;
+static inline unsigned char receiveSPI() {
+ return lastReceived;
 }
 
-ISR (SPI_STC_vect) {
- MLX90363::isr();
-}
-
-void MLX90363::isr() {
+void MLX90363::handleIncomingByte() {
  // Receive a byte
- RxBuffer[bufferPosition++] = receiveSPI();
+ RxBuffer[bufferPosition] = receiveSPI();
+ 
+ // Increment buffer position
+ bufferPosition++;
 
  // Check if we're done sending
  if (bufferPosition == messageLength) {
   // We're done. De-assert (turn on) the slave select line
-  Board::SPI::slaveDeselect();
-  
-  ::Clock::readTimeISR(dataReadyTime);
+  digitalWrite(currentMLX->pin, HIGH);
+
   // It takes 920us for a measurement to complete
-  dataReadyTime += 1_ms;
+  currentMLX->dataReadyTime = millis() + 2;
   
   responseState = ResponseState::Received;
   
@@ -49,59 +43,32 @@ void MLX90363::isr() {
  }
 }
 
-u1 MLX90363::TxBuffer[messageLength];
-u1 MLX90363::RxBuffer[messageLength];
-u1 MLX90363::bufferPosition = messageLength;
+unsigned char MLX90363::TxBuffer[messageLength];
+unsigned char MLX90363::RxBuffer[messageLength];
+unsigned char MLX90363::bufferPosition = messageLength;
 
 MLX90363::ResponseState MLX90363::responseState = MLX90363::ResponseState::Init;
 
+MLX90363 * MLX90363::currentMLX = nullptr;
 
-volatile u2 MLX90363::alpha;
-volatile u2 MLX90363::beta;
-volatile u2 MLX90363::X;
-volatile u2 MLX90363::Y;
-volatile u2 MLX90363::Z;
-
-volatile u1 MLX90363::err;
-volatile u1 MLX90363::VG;
-volatile u1 MLX90363::ROLL = 0xff;
-
+MLX90363::MLX90363(const unsigned int p) : pin(p) {
+  init();
+  pinMode(p, OUTPUT);
+}
 
 void MLX90363::init() {
- // Setup Slave Select line
- Board::SPI::slaveDeselect();
- Board::SPI::slaveSelectSetup();
+ static bool initted = false;
+ if (initted) return;
+ initted = true;
 
- // Setup "User Defined" hardware lines
- SCLK.output();
- MOSI.output();
- 
- // Don't forget the AVR's hardware SS line!
- PORTB &= ~1;
- DDRB  |= 1;
-
- // SPI hardware does this for us, but do it anyway
- SCLK.off();
- MISO.input();
- MISO.on();
-
- // Setup control registers
- 
- // Enable SPI2X
- AVR::SPI::SR->byte = 1 << SPI2X;
- // F_CPU/8
- AVR::SPI::CR->byte = 0b11010101;
+ SPI.begin();
 
  responseState = ResponseState::Ready;
 }
 
-void MLX90363::setSPISpeed(const u1 c) {
- AVR::SPI::CR->Divider = c;
-}
-
 void MLX90363::startTransmittingUnsafe() {
  bufferPosition = 0;
- Board::SPI::slaveSelect();
+ digitalWrite(currentMLX->pin, LOW);
  sendSPI(TxBuffer[bufferPosition]);
  responseState = ResponseState::Receiving;
 }
@@ -111,7 +78,7 @@ void MLX90363::startTransmittingUnsafe() {
  *
  * The name cba_256_TAB comes from the datasheet as well
  */
-static const u1 cba_256_TAB[] PROGMEM = {
+static const unsigned char cba_256_TAB[] = {
  0x00,0x2f,0x5e,0x71,0xbc,0x93,0xe2,0xcd,0x57,0x78,0x09,0x26,0xeb,0xc4,0xb5,0x9a,
  0xae,0x81,0xf0,0xdf,0x12,0x3d,0x4c,0x63,0xf9,0xd6,0xa7,0x88,0x45,0x6a,0x1b,0x34,
  0x73,0x5c,0x2d,0x02,0xcf,0xe0,0x91,0xbe,0x24,0x0b,0x7a,0x55,0x98,0xb7,0xc6,0xe9,
@@ -135,13 +102,13 @@ static const u1 cba_256_TAB[] PROGMEM = {
  * @param b
  * @return
  */
-static u1 lookupCRC(u1 const b) __attribute__((const));
-inline static u1 lookupCRC(u1 const b) {
- return pgm_read_byte(&cba_256_TAB[b]);
+static unsigned char lookupCRC(unsigned char const b) __attribute__((const));
+inline static unsigned char lookupCRC(unsigned char const b) {
+ return cba_256_TAB[b];
 }
 
 bool MLX90363::checkRxBufferCRC() {
- u1 crc = 0xff;
+ unsigned char crc = 0xff;
 
  crc = lookupCRC(RxBuffer[0] ^ crc);
  crc = lookupCRC(RxBuffer[1] ^ crc);
@@ -151,11 +118,11 @@ bool MLX90363::checkRxBufferCRC() {
  crc = lookupCRC(RxBuffer[5] ^ crc);
  crc = lookupCRC(RxBuffer[6] ^ crc);
 
- return RxBuffer[7] == (u1)~crc;
+ return RxBuffer[7] == (unsigned char)~crc;
 }
 
 void MLX90363::fillTxBufferCRC() {
- u1 crc = 0xff;
+ unsigned char crc = 0xff;
 
  crc = lookupCRC(TxBuffer[0] ^ crc);
  crc = lookupCRC(TxBuffer[1] ^ crc);
@@ -174,22 +141,22 @@ void MLX90363::handleResponse() {
   return;
  }
  
- u1 const marker = RxBuffer[6] >> 6;
+ unsigned char const marker = RxBuffer[6] >> 6;
 
  if (marker == 0) {
-  handleAlpha();
+  currentMLX->handleAlpha();
   responseState = ResponseState::TypeA;
   return;
  }
  
  if (marker == 1) {
-  handleAlphaBeta();
+  currentMLX->handleAlphaBeta();
   responseState = ResponseState::TypeAB;
   return;
  }
 
  if (marker == 2) {
-  handleXYZ();
+  currentMLX->handleXYZ();
   responseState = ResponseState::TypeXYZ;
   return;
  }
@@ -197,7 +164,7 @@ void MLX90363::handleResponse() {
  responseState = ResponseState::Other;
 }
 
-b6 MLX90363::getReceivedOpCode() {
+unsigned int MLX90363::getReceivedOpCode() {
  return RxBuffer[6] & 0x3f;
 }
 
@@ -228,7 +195,7 @@ void MLX90363::handleXYZ() {
  ROLL = RxBuffer[6] & 0x3f;
 }
 
-void MLX90363::prepareGET1Message(MessageType const type, const u2 timeout, bool const resetRoll) {
+void MLX90363::prepareGET1Message(MessageType const type, const unsigned short timeout, bool const resetRoll) {
  if (isTransmitting()) return;
  TxBuffer[0] = 0;
  TxBuffer[1] = resetRoll;
@@ -236,7 +203,7 @@ void MLX90363::prepareGET1Message(MessageType const type, const u2 timeout, bool
  TxBuffer[3] = timeout >> 8;
  TxBuffer[4] = 0;
  TxBuffer[5] = 0;
- TxBuffer[6] = (u1)type << 6 | (u1)Opcode::GET1;
+ TxBuffer[6] = (unsigned char)type << 6 | (unsigned char)Opcode::GET1;
  fillTxBufferCRC();
 }
 
@@ -246,5 +213,5 @@ void MLX90363::startTransmitting(){
 }
 
 bool MLX90363::isMeasurementReady() {
- return !isTransmitting() && dataReadyTime.isInPast();
+ return !(currentMLX == this && isTransmitting()) && (dataReadyTime < millis());
 }
