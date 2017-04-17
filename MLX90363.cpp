@@ -213,6 +213,20 @@ void MLX90363::startTransmitting(){
  startTransmittingUnsafe();
 }
 
+bool MLX90363::update() {
+  if (isTransmitting()) return false;
+  if (!isMeasurementReady()) return false;
+  
+  currentMLX = this;
+  
+  startTransmittingUnsafe();
+  while (isTransmitting()) handleIncomingByte();
+  
+  currentMLX = nullptr;
+  
+  return true;
+}
+
 bool MLX90363::isMeasurementReady() {
- return !(currentMLX == this && isTransmitting()) && (dataReadyTime < millis());
+ return dataReadyTime < millis();
 }

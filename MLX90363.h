@@ -114,11 +114,12 @@ class MLX90363 {
 public:
   
   MLX90363(const unsigned int p);
+  
+  bool update();
  
  /**
   * MLX requires a time between data checks.
   * This function returns true when the required time has passed
-  * as well as not currently transmitting
   */
  bool isMeasurementReady();
  
@@ -164,7 +165,7 @@ public:
  }
  
  /**
-  * Start sending whatever is in the buffer, unless it's already being sent
+  * Start sending whatever is in the buffer, unless it's already being used
   * 
   */
  static void startTransmitting();
