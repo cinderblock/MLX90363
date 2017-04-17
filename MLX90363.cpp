@@ -11,6 +11,8 @@
 
 static unsigned char lastReceived;
 
+SPISettings MLX90363::spiSettings(500 * 1000, MSBFIRST, SPI_MODE1);
+
 static inline void sendSPI(unsigned char const b) {
  lastReceived = SPI.transfer(b);
 }
@@ -32,7 +34,9 @@ void MLX90363::handleIncomingByte() {
   digitalWrite(currentMLX->pin, HIGH);
 
   // It takes 920us for a measurement to complete
-  currentMLX->dataReadyTime = millis() + 2;
+  currentMLX->dataReadyTime = millis() + 10;
+
+  SPI.endTransaction();
   
   responseState = ResponseState::Received;
   
@@ -68,6 +72,7 @@ void MLX90363::init() {
 }
 
 void MLX90363::startTransmittingUnsafe() {
+ SPI.beginTransaction(spiSettings);
  bufferPosition = 0;
  digitalWrite(currentMLX->pin, LOW);
  sendSPI(TxBuffer[bufferPosition]);

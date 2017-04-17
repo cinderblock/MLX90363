@@ -8,6 +8,8 @@
 #ifndef MLX90363_H
 #define	MLX90363_H
 
+#include <SPI.h>
+
 class MLX90363 {
  /**
   * The fixed message length that the MLX90363 sends
@@ -31,6 +33,8 @@ class MLX90363 {
  static unsigned char bufferPosition;
  
  enum class ResponseState : unsigned char;
+ 
+ static SPISettings spiSettings;
  
  static ResponseState responseState;
  
