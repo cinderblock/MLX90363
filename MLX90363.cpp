@@ -54,6 +54,7 @@ MLX90363 * MLX90363::currentMLX = nullptr;
 MLX90363::MLX90363(const unsigned int p) : pin(p) {
   init();
   pinMode(p, OUTPUT);
+  digitalWrite(p, HIGH);
 }
 
 void MLX90363::init() {
