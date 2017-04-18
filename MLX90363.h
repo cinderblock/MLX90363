@@ -208,6 +208,9 @@ public:
   */
  static void prepareGET1Message(MessageType const type, const unsigned short timeout = 0xffff, bool const resetRoll = false);
 
+ static constexpr unsigned int alphaBits = 14;
+ static constexpr unsigned int alphaModulo = 1 << alphaBits;
+ static constexpr unsigned int alphaMask = alphaModulo - 1;
 };
 
 #endif	/* MLX90363_H */
