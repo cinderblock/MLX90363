@@ -1,0 +1,8 @@
+# uMaker build output
+.bld/
+out/
+
+# Editor / OS noise
+.vscode/
+.DS_Store
+Thumbs.db
