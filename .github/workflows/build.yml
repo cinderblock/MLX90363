@@ -8,10 +8,10 @@ on:
   workflow_dispatch:
 
 jobs:
-  example-build:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
 
@@ -24,6 +24,7 @@ jobs:
         run: |
           avr-gcc --version | head -1
           avr-g++ --version | head -1
+          dpkg -s avr-libc | grep '^Version'
           make --version | head -1
 
       - name: Build the example
@@ -35,7 +36,7 @@ jobs:
         run: make size
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mlx-example-elf
           path: examples/out/mlx-example.elf
